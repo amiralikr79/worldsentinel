@@ -1,82 +1,88 @@
-// ─────────────────────────────────────────────────────────────────────────────
-//  GET /api/nasa
-//  Proxies NASA EONET open event feed (wildfires, storms, floods…).
-//  No API key required. Caches for 10 minutes.
-// ─────────────────────────────────────────────────────────────────────────────
-import { NextResponse } from 'next/server';
-import type { NasaEvent } from '@/lib/types';
+import { NextResponse } from 'next/server'
 
-// Only open events, limit to 50, past 30 days
-const NASA_URL =
-  'https://eonet.gsfc.nasa.gov/api/v3/events?status=open&limit=50&days=30';
+interface EONETGeometry {
+  type: string
+  coordinates: unknown
+  date: string
+}
 
-// Category → human label map
-const CAT_LABELS: Record<string, string> = {
-  wildfires:    'Wildfire',
-  severeStorms: 'Severe Storm',
-  volcanoes:    'Volcano',
-  seaLakeIce:   'Ice Event',
-  floods:       'Flood',
-  earthquakes:  'Earthquake',
-  drought:      'Drought',
-  snow:         'Snowstorm',
-  waterColor:   'Water Anomaly',
-};
+interface EONETSource {
+  id: string
+  url: string
+}
 
-export const runtime = 'edge';
-export const revalidate = 600;
+interface EONETCategory {
+  id: string
+  title: string
+}
+
+interface EONETEvent {
+  id: string
+  title: string
+  description: string | null
+  link: string
+  closed: string | null
+  categories: EONETCategory[]
+  sources: EONETSource[]
+  geometry: EONETGeometry[]
+}
+
+interface EONETResponse {
+  events: EONETEvent[]
+}
 
 export async function GET() {
   try {
-    const res = await fetch(NASA_URL, {
-      next: { revalidate: 600 },
-      signal: AbortSignal.timeout(8000),
-    });
+    const res = await fetch(
+      'https://eonet.gsfc.nasa.gov/api/v3/events?status=open&limit=50',
+      { next: { revalidate: 300 } }
+    )
 
     if (!res.ok) {
-      return NextResponse.json(
-        { ok: false, error: `NASA EONET returned ${res.status}` },
-        { status: 502 },
-      );
+      throw new Error(`NASA EONET API error: ${res.status}`)
     }
 
-    const raw = await res.json() as { events: NasaEvent[] };
+    const data: EONETResponse = await res.json()
 
-    const events = raw.events
-      .filter((e) => e.geometry.length > 0)
-      .map((e) => {
-        // Last known geometry point
-        const geo = e.geometry[e.geometry.length - 1];
-        const coords =
-          geo.type === 'Point'
-            ? (geo.coordinates as [number, number])
-            : (geo.coordinates as [number, number][][][])[0][0][0]; // polygon centroid fallback
+    const events = data.events
+      .filter((event) => event.geometry && event.geometry.length > 0)
+      .map((event) => {
+        const geo = event.geometry[0]
+        let lat = 0
+        let lng = 0
 
-        const catId  = e.categories[0]?.id ?? 'unknown';
-        const catLbl = CAT_LABELS[catId] ?? e.categories[0]?.title ?? 'Event';
+        if (geo.type === 'Point') {
+          const coords = geo.coordinates as unknown as [number, number]
+          lng = coords[0]
+          lat = coords[1]
+        } else if (geo.type === 'Polygon') {
+          const coords = geo.coordinates as unknown as [number, number][][]
+          if (coords[0] && coords[0][0]) {
+            lng = coords[0][0][0]
+            lat = coords[0][0][1]
+          }
+        }
 
         return {
-          id:       e.id,
-          title:    e.title,
-          category: catLbl,
-          catId,
-          lng:      coords[0],
-          lat:      coords[1],
-          date:     geo.date,
-          link:     e.link,
-        };
-      });
+          id: event.id,
+          title: event.title,
+          category: event.categories[0]?.title ?? 'Unknown',
+          categoryId: event.categories[0]?.id ?? 'unknown',
+          date: geo.date,
+          lat,
+          lng,
+          link: event.link,
+          closed: event.closed,
+        }
+      })
+      .filter((e) => e.lat !== 0 || e.lng !== 0)
 
+    return NextResponse.json({ events })
+  } catch (error) {
+    console.error('NASA EONET fetch error:', error)
     return NextResponse.json(
-      { ok: true, data: events, cachedAt: Date.now() },
-      {
-        headers: {
-          'Cache-Control': 'public, s-maxage=600, stale-while-revalidate=120',
-        },
-      },
-    );
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Unknown error';
-    return NextResponse.json({ ok: false, error: msg }, { status: 500 });
+      { error: 'Failed to fetch NASA events', events: [] },
+      { status: 500 }
+    )
   }
 }
