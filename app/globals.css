@@ -1,0 +1,125 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   SENTINEL — Global styles
+   Design system mirrors the HTML prototype. CSS custom properties are the
+   single source of truth; Tailwind extends them via tailwind.config.ts.
+───────────────────────────────────────────────────────────────────────────── */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Navy backgrounds */
+  --navy-950: #020b18;
+  --navy-900: #040f20;
+  --navy-800: #071428;
+  --navy-700: #0a1d38;
+
+  /* Accent palette */
+  --cyan:    #00d4ff;
+  --blue:    #0088ff;
+  --green:   #00ff88;
+  --red:     #ff3355;
+  --amber:   #ffaa00;
+  --purple:  #aa44ff;
+
+  /* Typography */
+  --text-primary:  #e8f4fd;
+  --text-muted:    #7090b0;
+  --font-mono:     'Courier New', monospace;
+}
+
+/* ── Base reset ───────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin:     0;
+  padding:    0;
+  height:     100%;
+  background: var(--navy-950);
+  color:      var(--text-primary);
+  font-family: var(--font-mono);
+  overflow:   hidden;
+}
+
+/* ── Scrollbar ────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar       { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(0, 212, 255, 0.2); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(0, 212, 255, 0.4); }
+
+/* ── Scanline texture (subtle CRT effect over the whole viewport) ─────────── */
+body::after {
+  content:  '';
+  position: fixed;
+  inset:    0;
+  pointer-events: none;
+  z-index:  9999;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent              0px,
+    transparent              2px,
+    rgba(0, 0, 0, 0.03)     2px,
+    rgba(0, 0, 0, 0.03)     4px
+  );
+}
+
+/* ── Glassmorphism panel utility ─────────────────────────────────────────── */
+.glass {
+  background:   rgba(7, 20, 40, 0.6);
+  border:       1px solid rgba(0, 212, 255, 0.12);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* ── Slide-in overlay panel ──────────────────────────────────────────────── */
+.slide-panel {
+  position:   fixed;
+  top:        56px;    /* height of TopBar */
+  bottom:     32px;    /* height of Ticker */
+  width:      360px;
+  z-index:    100;
+  transition: transform 0.3s ease;
+}
+
+.slide-panel-right {
+  right:     0;
+  transform: translateX(100%);
+}
+.slide-panel-right.open {
+  transform: translateX(0);
+}
+
+.slide-panel-left {
+  left:      0;
+  transform: translateX(-100%);
+}
+.slide-panel-left.open {
+  transform: translateX(0);
+}
+
+/* ── Backdrop overlay ────────────────────────────────────────────────────── */
+.panel-overlay {
+  display:    none;
+  position:   fixed;
+  inset:      0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index:    90;
+}
+.panel-overlay.show {
+  display: block;
+}
+
+/* ── Ticker keyframe (Tailwind can't inject arbitrary keyframes easily) ───── */
+@keyframes ticker_scroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+/* ── Utility: line clamp (Tailwind already handles this but for safety) ───── */
+.line-clamp-2 {
+  display:            -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow:           hidden;
+}
