@@ -1,4 +1,13 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/nasa
+// Proxies NASA EONET natural events feed (open events, max 50).
+// Runs on Vercel Edge — never statically generated at build time.
+// Caches 5 minutes between real user requests.
+// ─────────────────────────────────────────────────────────────────────────────
 import { NextResponse } from 'next/server'
+
+export const runtime = 'edge'
+export const dynamic = 'force-dynamic'
 
 interface EONETGeometry {
   type: string
@@ -35,11 +44,17 @@ export async function GET() {
   try {
     const res = await fetch(
       'https://eonet.gsfc.nasa.gov/api/v3/events?status=open&limit=50',
-      { next: { revalidate: 300 } }
+      {
+        next: { revalidate: 300 },
+        signal: AbortSignal.timeout(10000),
+      }
     )
 
     if (!res.ok) {
-      throw new Error(`NASA EONET API error: ${res.status}`)
+      return NextResponse.json(
+        { error: `NASA EONET API error: ${res.status}`, events: [] },
+        { status: 502 }
+      )
     }
 
     const data: EONETResponse = await res.json()
@@ -77,9 +92,17 @@ export async function GET() {
       })
       .filter((e) => e.lat !== 0 || e.lng !== 0)
 
-    return NextResponse.json({ events })
-  } catch (error) {
-    console.error('NASA EONET fetch error:', error)
+    return NextResponse.json(
+      { events },
+      {
+        headers: {
+          'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=60',
+        },
+      }
+    )
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown error'
+    console.error('NASA EONET fetch error:', msg)
     return NextResponse.json(
       { error: 'Failed to fetch NASA events', events: [] },
       { status: 500 }
