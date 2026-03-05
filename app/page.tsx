@@ -77,9 +77,12 @@ export default function SentinelDashboard() {
   const [spinning,      setSpinning]      = useState(true);
   const [watchlist,     setWatchlist]     = useState<Watchlist>(DEFAULT_WL);
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [watchlistOpen, setWatchlistOpen] = useState(false);
-  const [briefingOpen,  setBriefingOpen]  = useState(false);
-  const [newWLInput,    setNewWLInput]    = useState({ region: '', asset: '' });
+  const [watchlistOpen,  setWatchlistOpen]  = useState(false);
+  const [briefingOpen,   setBriefingOpen]   = useState(false);
+  const [newWLInput,     setNewWLInput]     = useState({ region: '', asset: '' });
+  const [briefingData,   setBriefingData]   = useState<DailyBriefing | null>(null);
+  const [briefingLoading,setBriefingLoading]= useState(false);
+  const [briefingError,  setBriefingError]  = useState<string | null>(null);
 
   // ── Data fetching ─────────────────────────────────────────────────────────
   const { quakes, isLoading: eqLoading } = useEarthquakes();
@@ -161,7 +164,38 @@ export default function SentinelDashboard() {
     });
   }, []);
 
-  // ── AI Briefing (mock — replace with Anthropic API call in Phase 2) ───────
+  // ── AI Briefing — real Claude API call ────────────────────────────────────
+  const generateBriefing = useCallback(async () => {
+    setBriefingLoading(true);
+    setBriefingError(null);
+    try {
+      const res = await fetch('/api/briefing', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          quakeCount:    quakes.length,
+          nasaCount:     nasaEvents.length,
+          btcChange:     coins.find((c) => c.id === 'bitcoin')?.change24h ?? 0,
+          btcPrice:      coins.find((c) => c.id === 'bitcoin')?.price ?? 0,
+          topQuakes:     quakes.filter((q) => q.mag >= 4.5).slice(0, 5).map((q) => ({ mag: q.mag, place: q.place })),
+          nasaEvents:    nasaEvents.slice(0, 8).map((e) => ({ title: e.title, category: e.category })),
+          newsHeadlines: newsItems.slice(0, 5).map((n) => n.title),
+        }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        setBriefingData(json.data as DailyBriefing);
+      } else {
+        setBriefingError(json.error ?? 'Failed to generate briefing.');
+      }
+    } catch {
+      setBriefingError('Network error. Please try again.');
+    } finally {
+      setBriefingLoading(false);
+    }
+  }, [quakes, nasaEvents, coins, newsItems]);
+
+  // ── AI Briefing fallback (shown before first generation) ──────────────────
   const briefing: DailyBriefing = useMemo(() => ({
     generatedAt: new Date().toISOString(),
     summary:     `Global intelligence summary for ${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}`,
@@ -402,39 +436,89 @@ export default function SentinelDashboard() {
       {/* ── Slide-in: AI Briefing (right) ───────────────────────────────── */}
       {briefingOpen && (
         <aside className="slide-panel slide-panel-right open glass shadow-2xl overflow-hidden flex flex-col">
+          {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-sentinel-cyan/20">
             <div>
               <span className="text-xs font-mono text-sentinel-cyan tracking-widest">◈ AI BRIEFING</span>
-              <div className="text-[10px] text-sentinel-muted mt-0.5">
-                {new Date(briefing.generatedAt).toLocaleTimeString()} ·{' '}
-                <span className={
-                  briefing.riskLevel === 'CRITICAL' || briefing.riskLevel === 'HIGH' ? 'text-sentinel-red' :
-                  briefing.riskLevel === 'ELEVATED' ? 'text-amber-400' : 'text-sentinel-green'
-                }>
-                  {briefing.riskLevel}
-                </span>
-              </div>
+              {briefingData && (
+                <div className="text-[10px] text-sentinel-muted mt-0.5">
+                  {new Date(briefingData.generatedAt).toLocaleTimeString()} ·{' '}
+                  <span className={
+                    briefingData.riskLevel === 'CRITICAL' || briefingData.riskLevel === 'HIGH' ? 'text-sentinel-red' :
+                    briefingData.riskLevel === 'ELEVATED' ? 'text-amber-400' : 'text-sentinel-green'
+                  }>
+                    {briefingData.riskLevel}
+                  </span>
+                  {' '}· Score: {briefingData.riskScore}
+                </div>
+              )}
             </div>
             <button onClick={() => setBriefingOpen(false)} className="text-sentinel-muted hover:text-sentinel-white text-lg">✕</button>
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
-            {/* Phase 2 upgrade notice */}
-            <div className="border border-amber-500/30 bg-amber-500/5 rounded p-2.5">
-              <p className="text-[10px] font-mono text-amber-400">⚡ UPGRADE PATH</p>
-              <p className="text-[11px] text-sentinel-muted mt-1">
-                Connect <code className="text-amber-300">ANTHROPIC_API_KEY</code> to generate real AI briefings via Claude. Current output is data-driven but template-generated.
-              </p>
-            </div>
-
-            <p className="text-xs text-sentinel-muted">{briefing.summary}</p>
-
-            {briefing.sections.map((section) => (
-              <div key={section.title} className="border border-sentinel-cyan/10 rounded p-3">
-                <p className="text-[10px] font-mono text-sentinel-cyan tracking-wider mb-1.5">{section.title}</p>
-                <p className="text-xs text-sentinel-white/80 leading-relaxed whitespace-pre-line">{section.content}</p>
+            {/* No briefing yet — show generate CTA */}
+            {!briefingData && !briefingLoading && (
+              <div className="flex flex-col items-center justify-center h-48 gap-4">
+                <div className="text-center">
+                  <p className="text-xs font-mono text-sentinel-cyan mb-1">SENTINEL AI ANALYST</p>
+                  <p className="text-[11px] text-sentinel-muted leading-relaxed">
+                    Generate a live intelligence briefing synthesized from<br />
+                    real-time earthquake, disaster, market, and news data.
+                  </p>
+                </div>
+                <button
+                  onClick={generateBriefing}
+                  className="px-4 py-2 text-xs font-mono text-sentinel-cyan border border-sentinel-cyan/40 rounded hover:bg-sentinel-cyan/10 transition-colors tracking-widest"
+                >
+                  ◈ GENERATE BRIEFING
+                </button>
               </div>
-            ))}
+            )}
+
+            {/* Loading state */}
+            {briefingLoading && (
+              <div className="flex flex-col items-center justify-center h-48 gap-3">
+                <div className="text-xs font-mono text-sentinel-cyan animate-pulse">ANALYSING GLOBAL CONDITIONS…</div>
+                <div className="text-[10px] text-sentinel-muted">Claude is reading live feeds</div>
+              </div>
+            )}
+
+            {/* Error state */}
+            {briefingError && !briefingLoading && (
+              <div className="border border-sentinel-red/30 bg-sentinel-red/5 rounded p-3">
+                <p className="text-[10px] font-mono text-sentinel-red mb-1">⚠ GENERATION FAILED</p>
+                <p className="text-[11px] text-sentinel-muted">{briefingError}</p>
+                <button
+                  onClick={generateBriefing}
+                  className="mt-2 text-[10px] font-mono text-sentinel-cyan hover:underline"
+                >
+                  Retry →
+                </button>
+              </div>
+            )}
+
+            {/* Live briefing content */}
+            {briefingData && !briefingLoading && (
+              <>
+                <p className="text-xs text-sentinel-muted leading-relaxed">{briefingData.summary}</p>
+
+                {briefingData.sections.map((section) => (
+                  <div key={section.title} className="border border-sentinel-cyan/10 rounded p-3">
+                    <p className="text-[10px] font-mono text-sentinel-cyan tracking-wider mb-1.5">{section.title}</p>
+                    <p className="text-xs text-sentinel-white/80 leading-relaxed whitespace-pre-line">{section.content}</p>
+                  </div>
+                ))}
+
+                {/* Regenerate button */}
+                <button
+                  onClick={generateBriefing}
+                  className="w-full py-2 text-[10px] font-mono text-sentinel-muted border border-sentinel-cyan/10 rounded hover:border-sentinel-cyan/30 hover:text-sentinel-cyan transition-colors tracking-widest"
+                >
+                  ↻ REGENERATE
+                </button>
+              </>
+            )}
           </div>
         </aside>
       )}
