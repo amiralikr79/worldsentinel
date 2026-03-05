@@ -4,6 +4,7 @@
 //  button, and connection status indicator.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState } from 'react';
+import Link from 'next/link';
 
 interface Notification {
   id:    number;
@@ -51,6 +52,15 @@ export default function TopBar({
         </div>
         <span className="text-sentinel-white font-mono text-sm font-bold tracking-[0.2em]">SENTINEL</span>
       </div>
+
+      {/* Home link */}
+      <Link
+        href="/"
+        className="text-[10px] font-mono text-sentinel-muted hover:text-sentinel-cyan transition-colors tracking-widest shrink-0"
+        title="Back to home"
+      >
+        ← HOME
+      </Link>
 
       {/* Separator */}
       <div className="h-6 w-px bg-sentinel-cyan/20" />
