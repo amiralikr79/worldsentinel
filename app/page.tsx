@@ -1,10 +1,12 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import EmailCapture from '@/components/EmailCapture';
 
 export const metadata: Metadata = {
   title: 'WorldSentinel — Global Intelligence Dashboard',
   description:
     'Real-time seismic, climate, geopolitical, and market intelligence — synthesised by AI. Built for investors, security professionals, and the globally informed.',
+  alternates: { canonical: 'https://worldsentinel.io' },
 };
 
 export default function LandingPage() {
@@ -17,12 +19,17 @@ export default function LandingPage() {
           <span className="text-[#00ff88] text-xs tracking-[0.3em] font-bold">◈</span>
           <span className="text-white text-sm tracking-[0.2em] font-bold">WORLDSENTINEL</span>
         </div>
-        <Link
-          href="/dashboard"
-          className="px-4 py-2 text-xs tracking-[0.15em] font-bold text-black bg-[#00ff88] hover:bg-[#00e07a] transition-colors rounded-sm"
-        >
-          LAUNCH DASHBOARD →
-        </Link>
+        <div className="flex items-center gap-4">
+          <Link href="/morning-brief" className="hidden sm:block text-xs tracking-[0.15em] text-white/40 hover:text-[#00ff88] transition-colors">
+            MORNING BRIEF
+          </Link>
+          <Link
+            href="/dashboard"
+            className="px-4 py-2 text-xs tracking-[0.15em] font-bold text-black bg-[#00ff88] hover:bg-[#00e07a] transition-colors rounded-sm"
+          >
+            LAUNCH DASHBOARD →
+          </Link>
+        </div>
       </nav>
 
       {/* ── HERO ── */}
@@ -37,8 +44,6 @@ export default function LandingPage() {
             backgroundSize: '60px 60px',
           }}
         />
-
-        {/* Glow */}
         <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-[#00ff88]/5 blur-[120px] pointer-events-none" />
 
         <div className="relative z-10 max-w-4xl mx-auto">
@@ -73,7 +78,6 @@ export default function LandingPage() {
             </a>
           </div>
 
-          {/* Live stats bar */}
           <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-white/30 tracking-widest">
             <span>🌍 GLOBAL SEISMIC MONITORING</span>
             <span className="hidden sm:inline text-white/10">·</span>
@@ -92,9 +96,7 @@ export default function LandingPage() {
       <section id="features" className="px-6 py-24 max-w-6xl mx-auto">
         <div className="text-center mb-16">
           <p className="text-[#00ff88] text-xs tracking-[0.3em] mb-3">CAPABILITIES</p>
-          <h2 className="text-3xl md:text-4xl font-bold text-white">
-            Every signal. One screen.
-          </h2>
+          <h2 className="text-3xl md:text-4xl font-bold text-white">Every signal. One screen.</h2>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-px bg-white/5 rounded-sm overflow-hidden">
@@ -103,37 +105,31 @@ export default function LandingPage() {
               icon: '◎',
               title: 'Live Seismic Intelligence',
               desc: 'USGS earthquake data refreshed every 30 seconds. Every event magnitude 2.5+ plotted on a live 3D globe with real-time magnitude and depth analysis.',
-              color: '#ff6b35',
             },
             {
               icon: '🤖',
               title: 'AI Intelligence Briefings',
               desc: 'Hit one button and Claude synthesises all live feeds into a structured daily briefing — risk score, threat assessment, market correlation, and priority alerts.',
-              color: '#00ff88',
             },
             {
               icon: '📡',
               title: 'NASA Disaster Monitoring',
-              desc: 'Direct feed from NASA EONET — wildfires, floods, severe storms, and volcanic activity tracked as they\'re classified, mapped and time-stamped.',
-              color: '#4da6ff',
+              desc: "Direct feed from NASA EONET — wildfires, floods, severe storms, and volcanic activity tracked as they're classified, mapped and time-stamped.",
             },
             {
               icon: '📈',
               title: 'Market Signal Correlation',
               desc: 'Live crypto prices alongside geopolitical events. Watch how BTC, ETH, and other assets move when real-world risk spikes — the correlation is real.',
-              color: '#ffd700',
             },
             {
               icon: '📰',
               title: 'Global News Wire',
               desc: 'BBC World Service RSS aggregated in real time. Breaking news displayed as it publishes, alongside the environmental and seismic events driving the headlines.',
-              color: '#c084fc',
             },
             {
               icon: '🌐',
               title: '3D Live Globe',
               desc: 'Three.js powered rotating globe with earthquake markers and disaster overlays. Click any marker for depth, magnitude, and location data.',
-              color: '#00ff88',
             },
           ].map((f) => (
             <div key={f.title} className="bg-[#020b18] p-8 hover:bg-[#041428] transition-colors group">
@@ -151,7 +147,7 @@ export default function LandingPage() {
       <section className="px-6 py-24 bg-[#010d1e]">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-16">
-            <p className="text-[#00ff88] text-xs tracking-[0.3em] mb-3">WHO IT'S FOR</p>
+            <p className="text-[#00ff88] text-xs tracking-[0.3em] mb-3">WHO IT&apos;S FOR</p>
             <h2 className="text-3xl md:text-4xl font-bold text-white">
               Built for people who need to know first.
             </h2>
@@ -168,6 +164,7 @@ export default function LandingPage() {
                   'AI briefing flags macro risk factors before they hit Bloomberg terminals',
                   'Track disaster events that historically precede commodity and energy spikes',
                 ],
+                href: '/for-investors',
               },
               {
                 tag: 'SECURITY PROFESSIONALS',
@@ -178,6 +175,7 @@ export default function LandingPage() {
                   'AI-generated risk scores updated on demand — not on a weekly report cycle',
                   'Structured intelligence briefings you can share up the chain in minutes',
                 ],
+                href: '/for-security',
               },
               {
                 tag: 'THE GLOBALLY INFORMED',
@@ -188,12 +186,19 @@ export default function LandingPage() {
                   'Understand how events connect — climate to conflict, seismic to supply chain',
                   'Daily AI briefing that makes you the most informed person in any room',
                 ],
+                href: '/for-curious',
               },
             ].map((a) => (
-              <div key={a.tag} className="border border-white/5 rounded-sm p-8 bg-[#020b18] hover:border-[#00ff88]/20 transition-colors">
+              <Link
+                key={a.tag}
+                href={a.href}
+                className="border border-white/5 rounded-sm p-8 bg-[#020b18] hover:border-[#00ff88]/20 transition-colors block group"
+              >
                 <div className="text-2xl mb-4">{a.icon}</div>
                 <p className="text-[#00ff88] text-xs tracking-[0.2em] mb-3">{a.tag}</p>
-                <h3 className="text-base font-bold text-white mb-4 leading-snug">{a.headline}</h3>
+                <h3 className="text-base font-bold text-white mb-4 leading-snug group-hover:text-[#00ff88] transition-colors">
+                  {a.headline}
+                </h3>
                 <ul className="space-y-3">
                   {a.points.map((pt) => (
                     <li key={pt} className="flex items-start gap-2 text-xs text-white/40 leading-relaxed">
@@ -202,7 +207,7 @@ export default function LandingPage() {
                     </li>
                   ))}
                 </ul>
-              </div>
+              </Link>
             ))}
           </div>
         </div>
@@ -236,8 +241,29 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── CTA ── */}
-      <section className="px-6 py-24 text-center border-t border-white/5">
+      {/* ── EMAIL CAPTURE ── */}
+      <section className="px-6 py-24 bg-[#010d1e] border-t border-b border-white/5">
+        <div className="max-w-2xl mx-auto text-center">
+          <div className="inline-flex items-center gap-2 px-3 py-1 mb-8 border border-[#00ff88]/30 rounded-full bg-[#00ff88]/5">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#00ff88] animate-pulse" />
+            <span className="text-[#00ff88] text-xs tracking-[0.2em]">MORNING BRIEF</span>
+          </div>
+          <h2 className="text-3xl md:text-4xl font-bold text-white mb-4 leading-tight">
+            The world, synthesised.<br />
+            <span className="text-[#00ff88]">In your inbox every morning.</span>
+          </h2>
+          <p className="text-white/40 text-sm mb-10 tracking-wide leading-relaxed">
+            Get a daily AI-powered intelligence briefing — geopolitical risk, live threats, market signals — 
+            delivered before the markets open. Free forever.
+          </p>
+          <div className="flex justify-center">
+            <EmailCapture source="landing-email-section" className="w-full" />
+          </div>
+        </div>
+      </section>
+
+      {/* ── FINAL CTA ── */}
+      <section className="px-6 py-24 text-center">
         <div className="max-w-2xl mx-auto">
           <div className="inline-flex items-center gap-2 px-3 py-1 mb-8 border border-[#00ff88]/30 rounded-full bg-[#00ff88]/5">
             <span className="w-1.5 h-1.5 rounded-full bg-[#00ff88] animate-pulse" />
@@ -265,7 +291,12 @@ export default function LandingPage() {
           <span className="text-[#00ff88] text-xs">◈</span>
           <span className="text-white/40 text-xs tracking-[0.2em]">WORLDSENTINEL</span>
         </div>
-        <p className="text-white/20 text-xs tracking-widest">GLOBAL INTELLIGENCE · LIVE · {new Date().getFullYear()}</p>
+        <div className="flex items-center gap-6 text-xs text-white/20 tracking-widest">
+          <Link href="/for-investors" className="hover:text-white/50 transition-colors">INVESTORS</Link>
+          <Link href="/for-security" className="hover:text-white/50 transition-colors">SECURITY</Link>
+          <Link href="/for-curious" className="hover:text-white/50 transition-colors">CURIOUS</Link>
+          <Link href="/morning-brief" className="hover:text-white/50 transition-colors">MORNING BRIEF</Link>
+        </div>
         <Link href="/dashboard" className="text-[#00ff88]/60 text-xs tracking-widest hover:text-[#00ff88] transition-colors">
           LAUNCH APP →
         </Link>
