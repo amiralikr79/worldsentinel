@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 export const runtime   = 'edge';
-export const revalidate = 600; // 10 minutes
+export const dynamic   = 'force-dynamic'
 
 export interface GdeltEvent {
   title:        string;
