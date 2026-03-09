@@ -1,10 +1,11 @@
 'use client';
 // ─────────────────────────────────────────────────────────────────────────────
-//  MarketPanel — crypto prices with sparklines + simulated global indices.
-//  Sparklines are rendered on <canvas> elements (no extra chart library needed).
+//  MarketPanel — crypto prices with sparklines + REAL global indices via
+//  /api/markets (Yahoo Finance proxy).
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useRef } from 'react';
 import type { CoinRow } from '@/lib/hooks/useCrypto';
+import { useMarkets } from '@/lib/hooks/useMarkets';
 
 // ── Sparkline helper ─────────────────────────────────────────────────────────
 function Sparkline({ values, positive }: { values: number[]; positive: boolean }) {
@@ -41,50 +42,50 @@ function Sparkline({ values, positive }: { values: number[]; positive: boolean }
   return <canvas ref={ref} className="w-16 h-6" />;
 }
 
-// ── Simulated global indices (replace with Polygon.io in Phase 2) ────────────
-const INITIAL_IDX = [
-  { symbol: 'SPX',   name: 'S&P 500',  base: 5782,  range: 18 },
-  { symbol: 'COMP',  name: 'NASDAQ',   base: 18540, range: 75 },
-  { symbol: 'FTSE',  name: 'FTSE 100', base: 8420,  range: 12 },
-  { symbol: 'NKY',   name: 'Nikkei',   base: 39200, range: 120 },
-  { symbol: 'DAX',   name: 'DAX',      base: 18950, range: 60 },
-];
+// ── Real index row ────────────────────────────────────────────────────────────
+function IndexRow({
+  shortName,
+  price,
+  changePct,
+  marketState,
+}: {
+  shortName:   string;
+  price:       number;
+  changePct:   number;
+  marketState: string;
+}) {
+  const up = changePct >= 0;
+  const fmtPrice =
+    price >= 10_000
+      ? price.toLocaleString('en-US', { maximumFractionDigits: 0 })
+      : price >= 1_000
+      ? price.toLocaleString('en-US', { maximumFractionDigits: 1 })
+      : price.toFixed(2);
 
-function useSimulatedIndex(base: number, range: number) {
-  const priceRef = useRef(base);
-  // Slight random drift on render — good enough for "feel alive" prototype
-  priceRef.current += (Math.random() - 0.5) * range * 0.06;
-  const change = ((priceRef.current - base) / base) * 100;
-  return { price: priceRef.current, change };
-}
-
-function IndexRow({ symbol, name, base, range }: typeof INITIAL_IDX[0]) {
-  const { price, change } = useSimulatedIndex(base, range);
-  const up = change >= 0;
   return (
     <div className="flex items-center justify-between py-1 border-b border-white/5 last:border-0">
-      <div>
-        <span className="text-sentinel-cyan text-xs font-mono">{symbol}</span>
-        <span className="text-sentinel-muted text-[10px] ml-1">{name}</span>
+      <div className="flex items-center gap-1.5">
+        <span className="text-sentinel-cyan text-xs font-mono truncate max-w-[90px]">{shortName}</span>
+        {marketState === 'CLOSED' && (
+          <span className="text-[8px] text-slate-600 font-mono">CLOSED</span>
+        )}
       </div>
       <div className="text-right">
-        <span className="text-sentinel-white text-xs font-mono">
-          {price.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-        </span>
+        <span className="text-sentinel-white text-xs font-mono">{fmtPrice}</span>
         <span className={`text-[10px] font-mono ml-1 ${up ? 'text-sentinel-green' : 'text-sentinel-red'}`}>
-          {up ? '+' : ''}{change.toFixed(2)}%
+          {up ? '+' : ''}{changePct.toFixed(2)}%
         </span>
       </div>
     </div>
   );
 }
 
-// ── Main component ───────────────────────────────────────────────────────────
+// ── Main component ────────────────────────────────────────────────────────────
 interface MarketPanelProps {
-  coins:      CoinRow[];
-  sparklines: Record<string, number[]>;
-  isLoading:  boolean;
-  rateLimited:boolean;
+  coins:       CoinRow[];
+  sparklines:  Record<string, number[]>;
+  isLoading:   boolean;
+  rateLimited: boolean;
 }
 
 export default function MarketPanel({
@@ -93,6 +94,8 @@ export default function MarketPanel({
   isLoading,
   rateLimited,
 }: MarketPanelProps) {
+  const { quotes, isLoading: mktLoading, isError: mktError } = useMarkets();
+
   const fmt = (n: number) =>
     n >= 1000
       ? n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
@@ -101,10 +104,10 @@ export default function MarketPanel({
   return (
     <div className="h-full flex flex-col overflow-hidden gap-3 p-3">
 
-      {/* ── Crypto ────────────────────────────────────────────────────────── */}
+      {/* ── Crypto ──────────────────────────────────────────────────────── */}
       <div>
         <div className="text-[10px] font-mono text-sentinel-muted tracking-widest mb-1">
-          CRYPTO  {rateLimited && <span className="text-amber-400 ml-1">⚠ RATE LIMITED</span>}
+          CRYPTO {rateLimited && <span className="text-amber-400 ml-1">⚠ RATE LIMITED</span>}
         </div>
         <div className="space-y-1">
           {isLoading ? (
@@ -132,15 +135,38 @@ export default function MarketPanel({
         </div>
       </div>
 
-      {/* ── Global Indices ─────────────────────────────────────────────────── */}
+      {/* ── Global Indices (real data) ───────────────────────────────────── */}
       <div>
-        <div className="text-[10px] font-mono text-sentinel-muted tracking-widest mb-1">
-          INDICES  <span className="text-amber-500/60 text-[9px]">SIMULATED — connect Polygon.io for live</span>
+        <div className="text-[10px] font-mono text-sentinel-muted tracking-widest mb-1 flex items-center gap-2">
+          INDICES
+          {mktLoading && <span className="text-slate-500 text-[9px]">loading…</span>}
+          {mktError   && <span className="text-amber-500 text-[9px]">⚠ unavailable</span>}
+          {!mktLoading && !mktError && (
+            <span className="text-emerald-500/60 text-[9px]">● live</span>
+          )}
         </div>
         <div>
-          {INITIAL_IDX.map((idx) => (
-            <IndexRow key={idx.symbol} {...idx} />
-          ))}
+          {mktLoading ? (
+            <div className="space-y-2">
+              {[1,2,3,4,5].map((i) => (
+                <div key={i} className="h-3 bg-white/10 rounded animate-pulse" style={{ width: `${55 + i * 8}%` }} />
+              ))}
+            </div>
+          ) : quotes.length > 0 ? (
+            quotes.map((q) => (
+              <IndexRow
+                key={q.symbol}
+                shortName={q.shortName}
+                price={q.price}
+                changePct={q.changePct}
+                marketState={q.marketState}
+              />
+            ))
+          ) : (
+            <div className="text-sentinel-muted text-[10px] font-mono py-2 text-center">
+              Market data unavailable
+            </div>
+          )}
         </div>
       </div>
     </div>

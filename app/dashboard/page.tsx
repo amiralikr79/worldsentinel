@@ -10,6 +10,8 @@
 //  │  Panel   │       (Three.js)       │   Panel       │
 //  │          │                        │               │
 //  ├──────────┴────────────────────────┴───────────────┤
+//  │  IntelLayers (collapsible: GDELT|Health|Markets)  │
+//  ├──────────────────────────────────────────────────┤
 //  │  Ticker (full width, bottom)                      │
 //  └──────────────────────────────────────────────────┘
 //
@@ -21,13 +23,15 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import useSWR from 'swr';
 
-import TopBar     from '@/components/TopBar';
-import NewsPanel  from '@/components/NewsPanel';
+import TopBar      from '@/components/TopBar';
+import NewsPanel   from '@/components/NewsPanel';
 import MarketPanel from '@/components/MarketPanel';
-import Ticker     from '@/components/Ticker';
+import Ticker      from '@/components/Ticker';
+import IntelLayers from '@/components/IntelLayers';
 
-import { useEarthquakes }  from '@/lib/hooks/useEarthquakes';
-import { useCrypto }       from '@/lib/hooks/useCrypto';
+import { useEarthquakes } from '@/lib/hooks/useEarthquakes';
+import { useCrypto }      from '@/lib/hooks/useCrypto';
+import { useGdelt }       from '@/lib/hooks/useGdelt';
 import type { GlobeMarker, Watchlist, DailyBriefing, NewsItem } from '@/lib/types';
 
 // Globe is a heavy Three.js component — load client-only, no SSR
@@ -73,20 +77,23 @@ function saveWatchlist(wl: Watchlist) {
 // ────────────────────────────────────────────────────────────────────────────
 export default function SentinelDashboard() {
   // ── State ─────────────────────────────────────────────────────────────────
-  const [searchQuery,   setSearchQuery]   = useState('');
-  const [spinning,      setSpinning]      = useState(true);
-  const [watchlist,     setWatchlist]     = useState<Watchlist>(DEFAULT_WL);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [searchQuery,    setSearchQuery]    = useState('');
+  const [spinning,       setSpinning]       = useState(true);
+  const [watchlist,      setWatchlist]      = useState<Watchlist>(DEFAULT_WL);
+  const [notifications,  setNotifications]  = useState<Notification[]>([]);
   const [watchlistOpen,  setWatchlistOpen]  = useState(false);
   const [briefingOpen,   setBriefingOpen]   = useState(false);
+  const [layersOpen,     setLayersOpen]     = useState(true);
   const [newWLInput,     setNewWLInput]     = useState({ region: '', asset: '' });
   const [briefingData,   setBriefingData]   = useState<DailyBriefing | null>(null);
   const [briefingLoading,setBriefingLoading]= useState(false);
   const [briefingError,  setBriefingError]  = useState<string | null>(null);
 
   // ── Data fetching ─────────────────────────────────────────────────────────
-  const { quakes, isLoading: eqLoading } = useEarthquakes();
+  const { quakes, isLoading: eqLoading }                          = useEarthquakes();
   const { coins, sparklines, isLoading: cryptoLoading, rateLimited } = useCrypto();
+  const { events: gdeltEvents }                                   = useGdelt();
+
   const { data: nasaData } = useSWR<{ ok: boolean; data: NasaEvent[] }>('/api/nasa', fetcher, {
     refreshInterval: 10 * 60 * 1000, revalidateOnFocus: false,
   });
@@ -104,6 +111,7 @@ export default function SentinelDashboard() {
   const globeMarkers = useMemo<GlobeMarker[]>(() => {
     const markers: GlobeMarker[] = [];
 
+    // Seismic events
     quakes.slice(0, 60).forEach((q) => {
       markers.push({
         id:        q.id,
@@ -115,6 +123,7 @@ export default function SentinelDashboard() {
       });
     });
 
+    // NASA natural disasters
     nasaEvents.slice(0, 30).forEach((e) => {
       markers.push({
         id:    e.id,
@@ -125,8 +134,22 @@ export default function SentinelDashboard() {
       });
     });
 
+    // GDELT conflict events (only those with valid coordinates)
+    gdeltEvents
+      .filter((e) => e.lat !== null && e.lng !== null)
+      .slice(0, 25)
+      .forEach((e, i) => {
+        markers.push({
+          id:    `gdelt-${i}`,
+          lat:   e.lat as number,
+          lng:   e.lng as number,
+          type:  'conflict',
+          label: `${e.locationName ?? e.country}: ${e.title.slice(0, 60)}`,
+        });
+      });
+
     return markers;
-  }, [quakes, nasaEvents]);
+  }, [quakes, nasaEvents, gdeltEvents]);
 
   // ── Push notification for M5.5+ quakes ───────────────────────────────────
   const seenIdsRef = useMemo(() => new Set<string>(), []);
@@ -173,13 +196,15 @@ export default function SentinelDashboard() {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          quakeCount:    quakes.length,
-          nasaCount:     nasaEvents.length,
-          btcChange:     coins.find((c) => c.id === 'bitcoin')?.change24h ?? 0,
-          btcPrice:      coins.find((c) => c.id === 'bitcoin')?.price ?? 0,
-          topQuakes:     quakes.filter((q) => q.mag >= 4.5).slice(0, 5).map((q) => ({ mag: q.mag, place: q.place })),
-          nasaEvents:    nasaEvents.slice(0, 8).map((e) => ({ title: e.title, category: e.category })),
-          newsHeadlines: newsItems.slice(0, 5).map((n) => n.title),
+          quakeCount:     quakes.length,
+          nasaCount:      nasaEvents.length,
+          conflictCount:  gdeltEvents.length,
+          btcChange:      coins.find((c) => c.id === 'bitcoin')?.change24h ?? 0,
+          btcPrice:       coins.find((c) => c.id === 'bitcoin')?.price ?? 0,
+          topQuakes:      quakes.filter((q) => q.mag >= 4.5).slice(0, 5).map((q) => ({ mag: q.mag, place: q.place })),
+          nasaEvents:     nasaEvents.slice(0, 8).map((e) => ({ title: e.title, category: e.category })),
+          newsHeadlines:  newsItems.slice(0, 5).map((n) => n.title),
+          conflictEvents: gdeltEvents.slice(0, 5).map((e) => ({ title: e.title, location: e.locationName ?? e.country })),
         }),
       });
       const json = await res.json();
@@ -193,7 +218,7 @@ export default function SentinelDashboard() {
     } finally {
       setBriefingLoading(false);
     }
-  }, [quakes, nasaEvents, coins, newsItems]);
+  }, [quakes, nasaEvents, gdeltEvents, coins, newsItems]);
 
   // ── AI Briefing fallback (shown before first generation) ──────────────────
   const briefing: DailyBriefing = useMemo(() => ({
@@ -205,11 +230,9 @@ export default function SentinelDashboard() {
       {
         title:   '🌍 GEOPOLITICAL OVERVIEW',
         icon:    '🌍',
-        content: `Systems tracking ${quakes.length} seismic events and ${nasaEvents.length} active natural hazards. ${
+        content: `Systems tracking ${quakes.length} seismic events, ${nasaEvents.length} active natural hazards, and ${gdeltEvents.length} conflict/crisis events. ${
           quakes.filter(q => q.mag >= 5).length
-        } significant earthquakes (M5.0+) recorded in the last 24 hours. Global risk index: ${
-          quakes.length > 20 ? 'ELEVATED' : 'NORMAL'
-        }.`,
+        } significant earthquakes (M5.0+) recorded in the last 24 hours.`,
       },
       {
         title:   '📈 MARKET INTELLIGENCE',
@@ -237,7 +260,9 @@ export default function SentinelDashboard() {
         ).join('\n') || '• No critical seismic alerts at this time.',
       },
     ],
-  }), [quakes, nasaEvents, coins]);
+  }), [quakes, nasaEvents, gdeltEvents, coins]);
+
+  void briefing; // suppress unused warning — used as default before AI generates
 
   // ── Build ticker items ────────────────────────────────────────────────────
   const tickerItems = useMemo(() => {
@@ -265,7 +290,7 @@ export default function SentinelDashboard() {
     return items;
   }, [coins, quakes, newsItems]);
 
-  // ── Connection status (polling since no WebSocket yet) ────────────────────
+  // ── Connection status ─────────────────────────────────────────────────────
   const connectionStatus = eqLoading && newsLoading ? 'polling' : 'polling';
 
   // ── Panel backdrop click handler ──────────────────────────────────────────
@@ -329,6 +354,11 @@ export default function SentinelDashboard() {
             <span className="text-[10px] font-mono text-sentinel-muted glass px-2 py-1 rounded">
               {nasaEvents.length} active disasters
             </span>
+            {gdeltEvents.filter(e => e.lat !== null).length > 0 && (
+              <span className="text-[10px] font-mono text-rose-400/80 glass px-2 py-1 rounded">
+                {gdeltEvents.filter(e => e.lat !== null).length} conflict events
+              </span>
+            )}
           </div>
 
           <Globe markers={globeMarkers} spinning={spinning} />
@@ -353,14 +383,18 @@ export default function SentinelDashboard() {
         </div>
       </div>
 
+      {/* ── Intel Layers (collapsible strip) ────────────────────────────── */}
+      <IntelLayers open={layersOpen} onToggle={() => setLayersOpen((v) => !v)} />
+
       {/* ── Bottom: Ticker ───────────────────────────────────────────────── */}
       <Ticker items={tickerItems} />
 
-      {/* ── Slide-in: Watchlist (left) ───────────────────────────────────── */}
+      {/* ── Slide-in overlay backdrop ────────────────────────────────────── */}
       {(watchlistOpen || briefingOpen) && (
         <div className="panel-overlay show" onClick={closeAllPanels} />
       )}
 
+      {/* ── Slide-in: Watchlist (left) ───────────────────────────────────── */}
       {watchlistOpen && (
         <aside className="slide-panel slide-panel-left open glass shadow-2xl overflow-hidden flex flex-col">
           <div className="flex items-center justify-between px-4 py-3 border-b border-sentinel-cyan/20">
@@ -464,7 +498,7 @@ export default function SentinelDashboard() {
                   <p className="text-xs font-mono text-sentinel-cyan mb-1">SENTINEL AI ANALYST</p>
                   <p className="text-[11px] text-sentinel-muted leading-relaxed">
                     Generate a live intelligence briefing synthesized from<br />
-                    real-time earthquake, disaster, market, and news data.
+                    real-time earthquake, disaster, conflict, market, and news data.
                   </p>
                 </div>
                 <button
@@ -502,15 +536,13 @@ export default function SentinelDashboard() {
             {briefingData && !briefingLoading && (
               <>
                 <p className="text-xs text-sentinel-muted leading-relaxed">{briefingData.summary}</p>
-
                 {briefingData.sections.map((section) => (
                   <div key={section.title} className="border border-sentinel-cyan/10 rounded p-3">
                     <p className="text-[10px] font-mono text-sentinel-cyan tracking-wider mb-1.5">{section.title}</p>
                     <p className="text-xs text-sentinel-white/80 leading-relaxed whitespace-pre-line">{section.content}</p>
                   </div>
                 ))}
-
-                {/* Regenerate button */}
+                {/* Regenerate */}
                 <button
                   onClick={generateBriefing}
                   className="w-full py-2 text-[10px] font-mono text-sentinel-muted border border-sentinel-cyan/10 rounded hover:border-sentinel-cyan/30 hover:text-sentinel-cyan transition-colors tracking-widest"
@@ -545,13 +577,12 @@ function FearGreedGauge({ quakeCount, btcChange }: { quakeCount: number; btcChan
       <div className="text-[10px] font-mono text-sentinel-muted mb-1">FEAR & GREED</div>
       <div className="flex items-center gap-3">
         <svg viewBox="0 0 130 80" width="90" height="55">
-          {/* Arcs: extreme fear → greed */}
           {[
-            ['#ff3355', 0,   36,  0.2],
-            ['#ff6633', 36,  72,  0.2],
-            ['#ffaa00', 72, 108,  0.2],
-            ['#88cc00', 108, 144, 0.2],
-            ['#00ff88', 144, 180, 0.2],
+            ['#ff3355', 0,   36],
+            ['#ff6633', 36,  72],
+            ['#ffaa00', 72, 108],
+            ['#88cc00', 108, 144],
+            ['#00ff88', 144, 180],
           ].map(([col, a1, a2], i) => {
             const r = 50;
             const cx = 65, cy = 68;
@@ -561,20 +592,14 @@ function FearGreedGauge({ quakeCount, btcChange }: { quakeCount: number; btcChan
             const x2 = cx + r * Math.cos(toRad(a2 as number));
             const y2 = cy + r * Math.sin(toRad(a2 as number));
             return (
-              <path
-                key={i}
+              <path key={i}
                 d={`M ${x1} ${y1} A ${r} ${r} 0 0 1 ${x2} ${y2}`}
-                stroke={col as string}
-                strokeWidth="8"
-                fill="none"
-                opacity="0.4"
+                stroke={col as string} strokeWidth="8" fill="none" opacity="0.4"
               />
             );
           })}
-          {/* Needle */}
           <line x1="65" y1="68" x2={needleX} y2={needleY} stroke={color} strokeWidth="2" strokeLinecap="round" />
           <circle cx="65" cy="68" r="4" fill={color} />
-          {/* Score */}
           <text x="65" y="60" textAnchor="middle" fill={color} fontSize="11" fontFamily="monospace" fontWeight="bold">{score}</text>
         </svg>
         <div>
